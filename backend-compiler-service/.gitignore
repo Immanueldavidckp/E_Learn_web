@@ -1,0 +1,11 @@
+# Ignore node_modules to save space
+node_modules/
+
+# Ignore temporary build directories
+tmp-*/
+
+# Ignore project build output if any
+projects/*/output.*
+
+# Ignore logs
+*.log
