@@ -33,6 +33,14 @@ const CoursePreview = ({ course, onStart, enrolled, enrolling, handleEnroll, enr
     handleEnroll();
   };
 
+  if (!course || !course.lessonData) {
+    return (
+      <div style={{ padding: '2rem', maxWidth: '900px', margin: '0 auto', color: 'red' }}>
+        <h2>Course data is not available.</h2>
+      </div>
+    );
+  }
+
   return (
     <div style={{ padding: '2rem', maxWidth: '900px', margin: '0 auto' }}>
       <div style={{ display: 'flex', gap: '2rem', marginBottom: '1rem' }}>

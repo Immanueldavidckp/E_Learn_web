@@ -119,17 +119,31 @@ const InteractiveLessonViewer = () => {
   const { courseId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const course = courseData[courseId];
+
   const [started, setStarted] = useState(false);
+
+  // Reset started state when courseId changes to show CoursePreview for new course
+  React.useEffect(() => {
+    console.log('CourseId changed:', courseId);
+    setStarted(false);
+  }, [courseId]);
+  
+  React.useEffect(() => {
+    console.log('Started state:', started);
+  }, [started]);
   const [enrolling, setEnrolling] = useState(false);
   const [enrollSuccess, setEnrollSuccess] = useState(null);
   const [enrollError, setEnrollError] = useState(null);
   const [enrolled, setEnrolled] = useState(false);
+  const [loadingEnrollment, setLoadingEnrollment] = useState(true);
+
+  const course = courseData[courseId];
 
   useEffect(() => {
     const checkEnrollment = async () => {
       if (!user) {
         setEnrolled(false);
+        setLoadingEnrollment(false);
         return;
       }
       const { data, error } = await supabase
@@ -143,6 +157,7 @@ const InteractiveLessonViewer = () => {
       } else {
         setEnrolled(true);
       }
+      setLoadingEnrollment(false);
     };
     checkEnrollment();
   }, [user, courseId]);
@@ -164,7 +179,7 @@ const InteractiveLessonViewer = () => {
       } else {
         setEnrollSuccess('Successfully enrolled in the course!');
         setEnrolled(true);
-        setStarted(true); // Show course content after enrollment
+        setStarted(true);
       }
     } catch (err) {
       setEnrollError('Failed to enroll. Please try again.');
@@ -173,7 +188,99 @@ const InteractiveLessonViewer = () => {
     }
   };
 
-  // Handle course preview state
+  if (loadingEnrollment) {
+    return <div>Loading...</div>;
+  }
+
+  if (!user || !enrolled) {
+    if (courseId) {
+      // Show course preview even if not logged in or enrolled
+      if (!started) {
+        return (
+          <div className="min-h-screen bg-background">
+            <NavigationSidebar />
+            <header className="bg-surface border-b border-border px-6 py-4 ml-0 md:ml-16 lg:ml-60">
+              <div className="flex items-center justify-between">
+                <h1 className="text-2xl font-semibold text-foreground">Learn</h1>
+                <UserProfileDropdown />
+              </div>
+            </header>
+            <main className="workspace ml-0 md:ml-16 lg:ml-60" style={{ flex: 1, padding: '1rem' }}>
+              <CoursePreview
+                course={course}
+                onStart={() => setStarted(true)}
+                enrolled={enrolled}
+                enrolling={enrolling}
+                handleEnroll={handleEnroll}
+                enrollSuccess={enrollSuccess}
+                enrollError={enrollError}
+                user={user}
+                navigate={navigate}
+              />
+            </main>
+          </div>
+        );
+      }
+      // If started but not enrolled, show enrollment prompt
+      return (
+        <div className="min-h-screen bg-background">
+          <NavigationSidebar />
+          <header className="bg-surface border-b border-border px-6 py-4 ml-0 md:ml-16 lg:ml-60">
+            <div className="flex items-center justify-between">
+              <h1 className="text-2xl font-semibold text-foreground">Learn</h1>
+              <UserProfileDropdown />
+            </div>
+          </header>
+          <main className="workspace ml-0 md:ml-16 lg:ml-60" style={{ flex: 1, padding: '1rem' }}>
+            <div className="p-4 text-center text-red-600">
+              You must enroll in this course to access the content.
+            </div>
+            <div className="mt-4">
+              <button
+                onClick={handleEnroll}
+                disabled={enrolling}
+                className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+              >
+                {enrolling ? 'Enrolling...' : 'Free Enroll'}
+              </button>
+              {enrollSuccess && <p className="text-green-600 mt-2">{enrollSuccess}</p>}
+              {enrollError && <p className="text-red-600 mt-2">{enrollError}</p>}
+            </div>
+          </main>
+        </div>
+      );
+    }
+    // If no courseId, show all courses
+    return (
+      <div className="min-h-screen bg-background">
+        <NavigationSidebar />
+        <header className="bg-surface border-b border-border px-6 py-4 ml-0 md:ml-16 lg:ml-60">
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-semibold text-foreground">Learn</h1>
+            <UserProfileDropdown />
+          </div>
+        </header>
+        <main className="workspace ml-0 md:ml-16 lg:ml-60" style={{ flex: 1, padding: '1rem' }}>
+          <CategorizedCoursesSection />
+        </main>
+      </div>
+    );
+  }
+
+  if (!course) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center">
+        <h2 className="text-2xl font-semibold text-red-600">Course not found</h2>
+        <button
+          onClick={() => navigate('/')}
+          className="mt-4 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+        >
+          Go to Home
+        </button>
+      </div>
+    );
+  }
+
   if (!started) {
     return (
       <div className="min-h-screen bg-background">
@@ -196,93 +303,31 @@ const InteractiveLessonViewer = () => {
             user={user}
             navigate={navigate}
           />
-          {/* Removed duplicate enroll button */}
         </main>
       </div>
     );
   }
 
-  if (!enrolled) {
-    return (
-      <div className="min-h-screen bg-background">
-        <NavigationSidebar />
-        <header className="bg-surface border-b border-border px-6 py-4 ml-0 md:ml-16 lg:ml-60">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-semibold text-foreground">Learn</h1>
-            <UserProfileDropdown />
-          </div>
-        </header>
-        <main className="workspace ml-0 md:ml-16 lg:ml-60" style={{ flex: 1, padding: '1rem' }}>
-          <div className="p-4 text-center text-red-600">
-            You must enroll in this course to access the content.
-          </div>
-          <div className="mt-4">
-            <button
-              onClick={handleEnroll}
-              disabled={enrolling}
-              className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
-            >
-              {enrolling ? 'Enrolling...' : 'Free Enroll'}
-            </button>
-            {enrollSuccess && <p className="text-green-600 mt-2">{enrollSuccess}</p>}
-            {enrollError && <p className="text-red-600 mt-2">{enrollError}</p>}
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  // Handle course-specific components
   if (courseId === 'c-program') {
-    return (
-      <div className="min-h-screen bg-background">
-        <NavigationSidebar />
-        <header className="bg-surface border-b border-border px-6 py-4 ml-0 md:ml-16 lg:ml-60">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-semibold text-foreground">Learn</h1>
-            <UserProfileDropdown />
-          </div>
-        </header>
-        <main className="workspace ml-0 md:ml-16 lg:ml-60" style={{ flex: 1, padding: '1rem' }}>
-          <CProgram />
-        </main>
-      </div>
-    );
+    return <CProgram />;
   }
 
   if (courseId === 'basic-electronics') {
-    return (
-      <div className="min-h-screen bg-background">
-        <NavigationSidebar />
-        <header className="bg-surface border-b border-border px-6 py-4 ml-0 md:ml-16 lg:ml-60">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-semibold text-foreground">Learn</h1>
-            <UserProfileDropdown />
-          </div>
-        </header>
-        <main className="workspace ml-0 md:ml-16 lg:ml-60" style={{ flex: 1, padding: '1rem' }}>
-          <Basic_electronics />
-        </main>
-      </div>
-    );
+    return <Basic_electronics />;
   }
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Navigation Sidebar */}
       <NavigationSidebar />
-
-      {/* Header */}
       <header className="bg-surface border-b border-border px-6 py-4 ml-0 md:ml-16 lg:ml-60">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold text-foreground">Learn</h1>
           <UserProfileDropdown />
         </div>
       </header>
-
       <main className="workspace ml-0 md:ml-16 lg:ml-60" style={{ flex: 1, padding: '1rem' }}>
         <WorkspaceToolbar />
-        <LessonHeader lessonData={course.lessonData} />
+        <LessonHeader lesson={course.lessonData} />
         <TableOfContents contents={course.tableOfContents} />
         <LessonContent content={course.lessonContent} />
         <LessonNavigation

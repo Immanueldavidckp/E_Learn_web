@@ -1,13 +1,20 @@
+import dotenv from 'dotenv';
+dotenv.config();
 
-const express = require('express');
-const cors = require('cors');
-const multer = require('multer');
-const { exec } = require('child_process');
-const pty = require('node-pty');
-const fs = require('fs');
-const path = require('path');
-const http = require('http');
-const WebSocket = require('ws');
+import express from 'express';
+import cors from 'cors';
+import multer from 'multer';
+import { exec } from 'child_process';
+import pty from 'node-pty';
+import fs from 'fs';
+import path from 'path';
+import http from 'http';
+import { WebSocketServer } from 'ws';
+import { createClient } from '@supabase/supabase-js';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const upload = multer();
@@ -29,10 +36,9 @@ const compilers = {
 };
 
 function parseErrors(stderr) {
-  // Basic error parsing, can be improved for better explanations
-  const lines = stderr.split('\\n');
+  const lines = stderr.split('\n');
   const errors = lines.filter(line => line.toLowerCase().includes('error'));
-  return errors.join('\\n');
+  return errors.join('\n');
 }
 
 app.post('/compile', upload.single('source'), (req, res) => {
@@ -63,7 +69,6 @@ app.post('/compile', upload.single('source'), (req, res) => {
       }
     });
 
-    // Clean up source file but keep tempDir for debugging if needed
     fs.unlinkSync(sourceFile);
 
     res.json({
@@ -75,14 +80,12 @@ app.post('/compile', upload.single('source'), (req, res) => {
   });
 });
 
-// New endpoint to run shell commands (e.g. make)
 app.post('/run-command', express.json(), (req, res) => {
   const { command } = req.body;
   if (!command) {
     return res.status(400).json({ error: 'No command provided' });
   }
 
-  // Run the command in the projects directory or temp directory
   const execOptions = { cwd: path.join(__dirname, 'projects', 'new') };
 
   exec(command, execOptions, (error, stdout, stderr) => {
@@ -95,14 +98,12 @@ app.post('/run-command', express.json(), (req, res) => {
 
 const PORT = process.env.PORT || 4000;
 
-// Helper function to create project files based on architecture
 function createProjectFiles(projectPath, architecture) {
   if (!fs.existsSync(projectPath)) {
     fs.mkdirSync(projectPath, { recursive: true });
   }
 
   if (architecture === 'arm-m4') {
-    // Create ARM M4 project files
     fs.writeFileSync(path.join(projectPath, 'Makefile'), `CC=arm-none-eabi-gcc
 CFLAGS=-mcpu=cortex-m4 -mthumb -O2
 LDFLAGS=-T linker.ld
@@ -119,8 +120,7 @@ clean:
 \trm -f $(OBJECTS) $(EXECUTABLE)
 `);
 
-    fs.writeFileSync(path.join(projectPath, 'linker.ld'), `/* Linker script for ARM M4 */
-SECTIONS
+    fs.writeFileSync(path.join(projectPath, 'linker.ld'), `SECTIONS
 {
   .text : { *(.text*) }
   .data : { *(.data*) }
@@ -134,36 +134,6 @@ SECTIONS
 
 .global _start
 _start:
-  /* Startup code here */
-  b .
-`);
-
-    fs.writeFileSync(path.join(projectPath, 'main.c'), `#include <stdint.h>
-
-int main(void) {
-  while (1) {
-    // Main loop
-  }
-  return 0;
-}
-`);
-
-    fs.writeFileSync(path.join(projectPath, 'linker.ld'), `/* Linker script for ARM M4 */
-SECTIONS
-{
-  .text : { *(.text*) }
-  .data : { *(.data*) }
-  .bss : { *(.bss*) }
-}
-`);
-
-    fs.writeFileSync(path.join(projectPath, 'startup.s'), `.syntax unified
-.cpu cortex-m4
-.thumb
-
-.global _start
-_start:
-  /* Startup code here */
   b .
 `);
 
@@ -177,7 +147,6 @@ int main(void) {
 }
 `);
   } else if (architecture === 'aarch64') {
-    // Create AARCH64 project files
     fs.writeFileSync(path.join(projectPath, 'Makefile'), `CC=aarch64-linux-gnu-gcc
 CFLAGS=-O2
 LDFLAGS=-static -nostdlib -T linker.ld
@@ -193,8 +162,7 @@ clean:
 \trm -f $(EXECUTABLE)
 `);
 
-    fs.writeFileSync(path.join(projectPath, 'linker.ld'), `/* Linker script for AARCH64 */
-SECTIONS
+    fs.writeFileSync(path.join(projectPath, 'linker.ld'), `SECTIONS
 {
   .text : { *(.text*) }
   .data : { *(.data*) }
@@ -244,9 +212,7 @@ app.post('/create-project', (req, res) => {
 });
 
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
-
-const { createClient } = require('@supabase/supabase-js');
+const wss = new WebSocketServer({ server });
 
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL,
@@ -254,34 +220,24 @@ const supabaseAdmin = createClient(
 );
 
 wss.on('connection', async (ws, req) => {
-  // Parse token from query params
   const urlParams = new URLSearchParams(req.url.replace('/?', ''));
   const token = urlParams.get('token');
-
-  console.log('Received token:', token);
 
   if (!token) {
     ws.close(1008, 'Authentication token missing');
     return;
   }
 
-  // Verify token with Supabase
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
-
-  console.log('Supabase getUser result:', { user, error });
 
   if (error || !user) {
     ws.close(1008, 'Invalid authentication token');
     return;
   }
 
-  // Determine working directory based on user id
   const baseProjectsDir = path.join(__dirname, 'projects');
   let cwd = path.join(baseProjectsDir, user.id);
 
-  console.log(`Spawning bash shell for user: ${user.id} in directory: ${cwd}`);
-
-  // Ensure directory exists
   if (!fs.existsSync(cwd)) {
     fs.mkdirSync(cwd, { recursive: true });
   }
@@ -299,17 +255,10 @@ wss.on('connection', async (ws, req) => {
   });
 
   ws.on('message', (message) => {
-    console.log('Received message from client:', message);
-    // Append newline if not present to simulate Enter key behavior
-    if (!message.toString().endsWith('\n')) {
-      shell.write(message.toString() + '\n');
-    } else {
-      shell.write(message.toString());
-    }
+    shell.write(message.toString());
   });
 
   ws.on('close', () => {
-    console.log('WebSocket connection closed');
     shell.kill();
   });
 

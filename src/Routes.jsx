@@ -31,9 +31,9 @@ const Routes = () => {
             path="/interactive-lesson-viewer"
             element={<InteractiveLessonViewer />} 
           />
-          <Route 
-            path="/interactive-lesson-viewer/:courseId" 
-            element={<InteractiveLessonViewer />} 
+          <Route
+            path="/interactive-lesson-viewer/:courseId"
+            element={<InteractiveLessonViewer />}
           />
 
           <Route
