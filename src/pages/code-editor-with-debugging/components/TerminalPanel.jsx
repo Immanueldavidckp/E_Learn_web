@@ -72,7 +72,8 @@ const TerminalPanel = () => {
           }
         } else {
           commandBuffer += data;  // Add to buffer
-          xtermRef.current.write(data);  // Echo on terminal
+          // Removed local echo to prevent duplicate characters
+          // xtermRef.current.write(data);  // Echo on terminal
         }
       });
     });
